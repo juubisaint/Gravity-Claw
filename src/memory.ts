@@ -3,7 +3,13 @@ const { Pool } = pg;
 import { config } from './config.js';
 
 // Initialize PostgreSQL Connection Pool
-// Connection pooling is better for cloud environments and serverless platforms
+if (!config.databaseUrl) {
+    console.warn('⚠️ DATABASE_URL is missing! Cloud memory will not work. Defaulting to localhost (likely to fail).');
+} else {
+    const maskedUrl = config.databaseUrl.replace(/:([^:@]+)@/, ':****@');
+    console.log(`🔌 Initializing Postgres Pool with: ${maskedUrl}`);
+}
+
 export const pool = new Pool({
     connectionString: config.databaseUrl,
     ssl: {
@@ -16,8 +22,24 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
-    console.error('❌ Unexpected error on idle client', err);
+    console.error('❌ Unexpected error on idle Postgres client:', err);
 });
+
+// Test the connection immediately on startup
+async function testConnection() {
+    try {
+        const client = await pool.connect();
+        console.log('🔌 Successfully established connection to Postgres.');
+        client.release();
+    } catch (err) {
+        console.error('❌ Failed to connect to Postgres database!', err);
+        if (err instanceof Error && err.message.includes('ECONNREFUSED')) {
+            console.error('💡 TIP: If you are seeing ECONNREFUSED, your network might be blocking port 5432 or you might need to use the Supabase Pooler URL (usually port 6543).');
+        }
+    }
+}
+
+testConnection();
 
 async function initSchema() {
     try {
@@ -39,7 +61,7 @@ async function initSchema() {
 }
 
 // Run schema initialization
-initSchema();
+initSchema().catch(err => console.error('🔴 Critical: Failed to initialize schema on startup.', err));
 
 // Save a new message to the database
 export async function saveMessage(userId: string, role: 'user' | 'assistant', content: string): Promise<void> {
@@ -49,8 +71,9 @@ export async function saveMessage(userId: string, role: 'user' | 'assistant', co
             [userId, role, content]
         );
     } catch (err) {
-        console.error('❌ Error saving message:', err);
-        throw err;
+        console.error('❌ Database Save Error:', err instanceof Error ? err.message : String(err));
+        // We catch but don't re-throw to prevent the bot from crashing on memory failures
+        // The bot will still respond but won't "remember" this specific message
     }
 }
 
@@ -69,7 +92,8 @@ export async function getRecentContext(userId: string, limit: number = 20): Prom
             content: row.content
         }));
     } catch (err) {
-        console.error('❌ Error retrieving context:', err);
-        throw err;
+        console.error('❌ Database Context Retrieval Error:', err instanceof Error ? err.message : String(err));
+        // Return empty context if database fails so the bot can still reply (even with amnesia)
+        return [];
     }
 }
