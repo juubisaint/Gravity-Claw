@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: gravity-claw
     runtime: node
     buildCommand: npm install && npm run build
