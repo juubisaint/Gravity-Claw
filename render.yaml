@@ -1,6 +1,7 @@
 services:
   - type: web
     name: gravity-claw
+    plan: free
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm run start:prod
