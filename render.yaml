@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: gravity-claw
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: ALLOWED_DISCORD_USER_ID
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: 3000
+    # Add a health check to keep the service from sleeping if using a monitoring tool
+    healthCheckPath: /
